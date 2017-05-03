@@ -3,12 +3,11 @@
 
 import time
 import pandas as pd
+import numpy as np
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import confusion_matrix, accuracy_score
-from sklearn.model_selection import cross_val_score
-
+#from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix, accuracy_score, make_scorer
+from sklearn.model_selection import cross_val_score, StratifiedKFold
 
 startTime = time.time()
 
@@ -16,30 +15,30 @@ rootDir = "C:/Users/rarez/Documents/Data Science/human_activity/data/"
 
 trainData = pd.read_csv(rootDir + "train.csv")     
 
-y = trainData.pop('activity_id')      
-X = trainData           
+y = trainData.pop('activity_id').values
+X = trainData.values           
 
-#X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, stratify = y, random_state=27182)
+classifier = RandomForestClassifier(n_estimators=100, class_weight='balanced', n_jobs = -1)
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state=27182)
+skf = StratifiedKFold(n_splits=5, shuffle = True, random_state = 314159)
+scores = []
+for train_index, test_index in skf.split(X, y):
+    
+    X_train, X_test = X[train_index], X[test_index]
+    y_train, y_test = y[train_index], y[test_index]
 
-#X_train = StandardScaler().fit_transform(X_train)
+    classifier.fit(X_train, y_train)
+    y_pred = classifier.predict(X_test)
+    scores.append(accuracy_score(y_test, y_pred))
 
-classifier = RandomForestClassifier(n_estimators=100, class_weight='balanced')
-classifier.fit(X_train, y_train)
+scores = np.array(scores)
 
-#X_test = StandardScaler().fit_transform(X_test)
-
-y_pred = classifier.predict(X_test)
-
-cnf_matrix = confusion_matrix(y_test, y_pred)
-
-accuracy_score(y_test, y_pred)
-
-scores = cross_val_score(classifier, X, y, cv=5, scoring = 'accuracy', n_jobs=-1)
 print("Accuracy: {:.3f} (+/- {:.3f})".format(scores.mean(), scores.std()))
-
-
 print("Total processing time: {:.2f} minutes".format((time.time()-startTime)/60))
+
+
+#confusion_matrix(y_test, y_pred)
+
+
 
 
