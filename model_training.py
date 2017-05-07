@@ -9,14 +9,14 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import confusion_matrix, accuracy_score, make_scorer
 from sklearn.model_selection import cross_val_score, StratifiedKFold
 
-startTime = time.time()
+start_time = time.time()
 
-rootDir = "C:/Users/rarez/Documents/Data Science/human_activity/data/"
+root_dir = "C:/Users/rarez/Documents/Data Science/human_activity/data/"
 
-trainData = pd.read_csv(rootDir + "train.csv")     
+train_data = pd.read_csv(root_dir + "train.csv")     
 
-y = trainData.pop('activity_id').values
-X = trainData.values           
+X = train_data.loc[:, 'median_x':].values
+y = train_data.loc[:, 'activity_id'].values
 
 classifier = RandomForestClassifier(n_estimators=100, class_weight='balanced', n_jobs = -1)
 
@@ -34,7 +34,7 @@ for train_index, test_index in skf.split(X, y):
 scores = np.array(scores)
 
 print("Accuracy: {:.3f} (+/- {:.3f})".format(scores.mean(), scores.std()))
-print("Total processing time: {:.2f} minutes".format((time.time()-startTime)/60))
+print("Total processing time: {:.2f} minutes".format((time.time()-start_time)/60))
 
 
 #confusion_matrix(y_test, y_pred)
