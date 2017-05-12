@@ -36,6 +36,10 @@ period_anomaly.hist()
 period_anomaly = time_interval[(time_interval>=0) & (time_interval<1)]
 period_anomaly.hist()
 
+period_anomaly = time_interval[(time_interval>=49.99) & (time_interval<50.01)]
+period_anomaly.hist()
+
+
 period_anomaly[:100]
 
 train_raw.loc[2750:2780]

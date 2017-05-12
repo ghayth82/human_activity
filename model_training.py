@@ -16,7 +16,7 @@ root_dir = "C:/Users/rarez/Documents/Data Science/human_activity/data/"
 
 train_data = pd.read_csv(root_dir + "train.csv")     
 
-X = train_data.loc[:, 'median_x':].values
+X = train_data.loc[:, 'mean_x':].values
 y = train_data.loc[:, 'activity_id'].values
 
 classifier = RandomForestClassifier(n_estimators=100, class_weight='balanced', n_jobs = -1)
