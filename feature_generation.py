@@ -29,83 +29,75 @@ def butter_bandpass_filter(signal_data, lowcut, highcut, fs, order=5):
     filtered_signal = signal.filtfilt(b, a, signal_data)
     return filtered_signal
 
-def preprocess_data(train_raw):
+def preprocess_data(data_raw):
     sampling_rate = 20 # Hz
 
-    train_data = train_raw.copy()                     
-    train_data = train_data.drop_duplicates()
+    data = data_raw.copy()                     
+    data = data.drop_duplicates()
     
-    train_data['idx'] = list(range(len(train_data)))
-    train_data = train_data.set_index('idx')
-    
-    outliers = train_data['x'] > train_data['x'].quantile(0.999)
-    train_data.loc[outliers, 'x'] = train_data['x'].quantile(0.999)
-    outliers = train_data['x'] < train_data['x'].quantile(0.001)
-    train_data.loc[outliers, 'x'] = train_data['x'].quantile(0.001)   
-    
-    outliers = train_data['y'] > train_data['y'].quantile(0.999)
-    train_data.loc[outliers, 'y'] = train_data['y'].quantile(0.999)
-    outliers = train_data['y'] < train_data['y'].quantile(0.001)
-    train_data.loc[outliers, 'y'] = train_data['y'].quantile(0.001)    
+    data['idx'] = list(range(len(data)))
+    data = data.set_index('idx')
 
-    outliers = train_data['z'] > train_data['z'].quantile(0.999)
-    train_data.loc[outliers, 'z'] = train_data['z'].quantile(0.999)
-    outliers = train_data['z'] < train_data['z'].quantile(0.001)
-    train_data.loc[outliers, 'z'] = train_data['z'].quantile(0.001)    
+    for axis in ['x', 'y', 'z']:
+        outliers = abs(data[axis])<1e-6
+        data.loc[outliers, axis] = 1e-6
+        outliers = data[axis] > data[axis].quantile(0.999)
+        data.loc[outliers, axis] = data[axis].quantile(0.999)
+        outliers = data[axis] < data[axis].quantile(0.001)
+        data.loc[outliers, axis] = data[axis].quantile(0.001)   
     
-    train_data['magnitude'] = (train_data['x']**2 + train_data['y']**2 + train_data['z']**2)**0.5
+    data['magnitude'] = (data['x']**2 + data['y']**2 + data['z']**2)**0.5
     
-    train_data['filt_x'] = butter_lowpass_filter(train_data['x'], 0.25, sampling_rate)
-    train_data['filt_y'] = butter_lowpass_filter(train_data['y'], 0.25, sampling_rate)
-    train_data['filt_z'] = butter_lowpass_filter(train_data['z'], 0.25, sampling_rate)
+    data['filt_x'] = butter_lowpass_filter(data['x'], 0.75, sampling_rate)
+    data['filt_y'] = butter_lowpass_filter(data['y'], 0.75, sampling_rate)
+    data['filt_z'] = butter_lowpass_filter(data['z'], 0.75, sampling_rate)
 
-    return train_data
+    return data
 
-def generate_basic_stats(window_data, features, feat_list):
-    features['mean_x'] = window_data['x'].mean() 
-    features['mean_y'] = window_data['y'].mean() 
-    features['mean_z'] = window_data['z'].mean() 
-    features['mean_mag'] = window_data['magnitude'].mean() 
-    feat_list.extend(['mean_x', 'mean_y', 'mean_z', 'mean_mag'])
+def generate_moments(window_data, features, feat_list):
     
-    features['mean_filt_x'] = window_data['filt_x'].mean()
-    features['mean_filt_y'] = window_data['filt_y'].mean() 
-    features['mean_filt_z'] = window_data['filt_z'].mean() 
-    feat_list.extend(['mean_filt_x', 'mean_filt_y', 'mean_filt_z'])
-    
-    features['std_x'] = window_data['x'].std()
-    features['std_y'] = window_data['y'].std()
-    features['std_z'] = window_data['z'].std()
-    features['std_mag'] = window_data['magnitude'].std()
-    feat_list.extend(['std_x', 'std_y', 'std_z', 'std_mag'])
-                                                
-    features['std_filt_x'] = window_data['filt_x'].std()
-    features['std_filt_y'] = window_data['filt_y'].std()
-    features['std_filt_z'] = window_data['filt_z'].std()
-    feat_list.extend(['std_filt_x', 'std_filt_y', 'std_filt_z'])
+    for axis in ['x', 'y', 'z', 'filt_x', 'filt_y', 'filt_z', 'magnitude']:
+        feat_name = 'mean_' + axis
+        features[feat_name] = window_data[axis].mean() 
+        feat_list.append(feat_name)
 
+    for axis in ['x', 'y', 'z', 'filt_x', 'filt_y', 'filt_z', 'magnitude']:
+        feat_name = 'std_' + axis
+        features[feat_name] = window_data[axis].std()
+        feat_list.append(feat_name)
+        
+    for axis in ['x', 'y', 'z', 'filt_x', 'filt_y', 'filt_z', 'magnitude']:
+        feat_name = 'skew_' + axis
+        features[feat_name] = window_data[axis].skew()
+        feat_list.append(feat_name)
+        
+    for axis in ['x', 'y', 'z', 'filt_x', 'filt_y', 'filt_z', 'magnitude']:
+        feat_name = 'kurt_' + axis
+        features[feat_name] = window_data[axis].kurtosis()
+        feat_list.append(feat_name)
+        
     return features, feat_list
+
 
 def generate_quantiles(window_data, features, feat_list):
-    features['q25_x'] = window_data['x'].quantile(0.25)
-    features['q25_y'] = window_data['y'].quantile(0.25)
-    features['q25_z'] = window_data['z'].quantile(0.25)
-    features['q25_mag'] = window_data['magnitude'].quantile(0.25)
-    feat_list.extend(['q25_x', 'q25_y', 'q25_z', 'q25_mag'])
-    
-    features['q50_x'] = window_data['x'].quantile(0.50)
-    features['q50_y'] = window_data['y'].quantile(0.50)
-    features['q50_z'] = window_data['z'].quantile(0.50)
-    features['q50_mag'] = window_data['magnitude'].quantile(0.50)
-    feat_list.extend(['q50_x', 'q50_y', 'q50_z', 'q50_mag'])
-    
-    features['q75_x'] = window_data['x'].quantile(0.75)
-    features['q75_y'] = window_data['y'].quantile(0.75)
-    features['q75_z'] = window_data['z'].quantile(0.75)
-    features['q75_mag'] = window_data['magnitude'].quantile(0.75)
-    feat_list.extend(['q75_x', 'q75_y', 'q75_z', 'q75_mag'])
-    
+
+    for axis in ['x', 'y', 'z', 'filt_x', 'filt_y', 'filt_z', 'magnitude']:
+        feat_name = 'q25_' + axis
+        features[feat_name] = window_data[axis].quantile(0.25)
+        feat_list.append(feat_name)
+        
+    for axis in ['x', 'y', 'z', 'filt_x', 'filt_y', 'filt_z', 'magnitude']:
+        feat_name = 'q50_' + axis
+        features[feat_name] = window_data[axis].quantile(0.50)
+        feat_list.append(feat_name)
+
+    for axis in ['x', 'y', 'z', 'filt_x', 'filt_y', 'filt_z', 'magnitude']:
+        feat_name = 'q75_' + axis
+        features[feat_name] = window_data[axis].quantile(0.75)
+        feat_list.append(feat_name)
+
     return features, feat_list
+
     
 def generate_psd(window_data, features, feat_list, sampling_rate):
     import numpy as np
@@ -113,15 +105,19 @@ def generate_psd(window_data, features, feat_list, sampling_rate):
     freq_bands = [0.01, 0.75, 2.50, 5.0, 7.5, 10]
     n_freq_bands = len(freq_bands)-1
     
-    for axis in ['x', 'y', 'z']:
+    for axis in ['x', 'y', 'z', 'filt_x', 'filt_y', 'filt_z', 'magnitude']:
         freq, PSD = signal.periodogram(window_data[axis], sampling_rate)
         for j in range(n_freq_bands):
-            freq_filter = np.logical_and(freq >= freq_bands[j], freq < freq_bands[j+1])
-            features['psd' + str(j) + '_' + axis] = PSD[freq_filter].sum()/PSD.sum()
-            feat_list.append('psd' + str(j) + '_' + axis)
+            feat_name = 'psd' + str(j) + '_' + axis
+            if PSD.sum() > 1e-6:
+                freq_filter = np.logical_and(freq >= freq_bands[j], freq < freq_bands[j+1])
+                features[feat_name] = PSD[freq_filter].sum()/PSD.sum()
+            else:
+                features[feat_name] = 0
+
+            feat_list.append(feat_name)
     
     return features, feat_list
-    
     
 
 def generate_features(window_data, sampling_rate, d_type):
@@ -130,32 +126,32 @@ def generate_features(window_data, sampling_rate, d_type):
                   "Stairs"   : 3, "Standing" : 4, "Walking"  : 5}		 
     
     features = dict()
-    feat_list = []
+    feat_list = list()
     
     if d_type == 'Train':
         # sets user_id to id with most rows in the window
         grouped = window_data.groupby('id').size()
         features['user_id'] = grouped.sort_values(ascending=False).index[0]
+        feat_list.append('user_id')
         
         # sets activity_id to activity with most rows in the window
         grouped = window_data.groupby('activity').size()
         activity = grouped.sort_values(ascending=False).index[0]
         features['activity_id'] = activities[activity]
+        feat_list.append('activity_id')
 
-        feat_list.extend(['user_id', 'activity_id'])
-        
     features['win_begin_idx'] = window_data.iloc[0,:].name
     features['win_end_idx'] = window_data.iloc[len(window_data)-1,:].name
     feat_list.extend(['win_begin_idx', 'win_end_idx'])
     
-    features, feat_list = generate_basic_stats(window_data, features, feat_list)
+    features, feat_list = generate_moments(window_data, features, feat_list)
     features, feat_list = generate_quantiles(window_data, features, feat_list)
     features, feat_list = generate_psd(window_data, features, feat_list, sampling_rate)
     
     return features, feat_list
 
 
-def generate_samples(train_data):
+def generate_samples(data, d_type):
     sampling_rate = 20 # Hz
     window_length = 2  # seconds
     window_size = int(sampling_rate * window_length)
@@ -163,9 +159,9 @@ def generate_samples(train_data):
     features = []
     begin_row = 0
     end_row = window_size
-    while(end_row <= train_data.shape[0]):
-        window_data = train_data[begin_row:end_row]
-        feat_sample, feat_list = generate_features(window_data, sampling_rate, 'Train')
+    while(end_row <= data.shape[0]):
+        window_data = data[begin_row:end_row]
+        feat_sample, feat_list = generate_features(window_data, sampling_rate, d_type)
         features.append(feat_sample)
         begin_row = end_row
         end_row = end_row + window_size
@@ -176,7 +172,9 @@ def generate_samples(train_data):
 
 
 
-#%%
+#%% ---------------------------------------------------------------------------
+# Train and Test files generation
+
 import time
 import pandas as pd
 
@@ -186,11 +184,15 @@ root_dir = "C:/Users/rarez/Documents/Data Science/human_activity/data/"
 
 train_raw = pd.read_csv(root_dir + "train_raw.csv")   
 train_data = preprocess_data(train_raw) 
-train = generate_samples(train_data)
+train = generate_samples(train_data, 'Train')
 train.to_csv(root_dir + 'train.csv', index = False)
-
+'''
+test_raw = pd.read_csv(root_dir + "test_raw.csv")
+test_data = preprocess_data(test_raw) 
+test = generate_samples(test_data, 'Test')
+test.to_csv(root_dir + 'test.csv', index = False)
+'''
 print("Total processing time: {:.2f} minutes".format((time.time()-start_time)/60))
-
 
                 
 #%% ---------------------------------------------------------------------------
