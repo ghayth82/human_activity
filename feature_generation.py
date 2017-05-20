@@ -48,11 +48,29 @@ def preprocess_data(data_raw):
     
     data['magnitude'] = (data['x']**2 + data['y']**2 + data['z']**2)**0.5
     
-    data['filt_x'] = butter_lowpass_filter(data['x'], 0.75, sampling_rate)
-    data['filt_y'] = butter_lowpass_filter(data['y'], 0.75, sampling_rate)
-    data['filt_z'] = butter_lowpass_filter(data['z'], 0.75, sampling_rate)
+    data['filt_x'] = butter_lowpass_filter(data['x'], 0.50, sampling_rate)
+    data['filt_y'] = butter_lowpass_filter(data['y'], 0.50, sampling_rate)
+    data['filt_z'] = butter_lowpass_filter(data['z'], 0.50, sampling_rate)
 
     return data
+
+
+def postprocess_train_data(train_data):
+    train_data = train_data[train_data.user_id != 358]
+    '''
+    user_filter = (train_data.user_id == 358) & (train_data.activity_id.isin((1,2)))
+    down_sample = train_data[user_filter]
+    train_data = train_data[~user_filter]
+    
+    down_sample_1 = down_sample[down_sample.activity_id == 1]
+    down_sample_1 = down_sample_1[:100]
+    down_sample_2 = down_sample[down_sample.activity_id == 2]
+    down_sample_2 = down_sample_2[:100]
+    
+    train_data = pd.concat([train_data, down_sample_1, down_sample_2])
+    '''
+    return train_data
+    
 
 def generate_moments(window_data, features, feat_list):
     
@@ -102,7 +120,7 @@ def generate_quantiles(window_data, features, feat_list):
 def generate_psd(window_data, features, feat_list, sampling_rate):
     import numpy as np
 
-    freq_bands = [0.01, 0.75, 2.50, 5.0, 7.5, 10]
+    freq_bands = [0.01, 1.0, 2.0, 4.0, 6.0, 8.0, 10.0]
     n_freq_bands = len(freq_bands)-1
     
     for axis in ['x', 'y', 'z', 'filt_x', 'filt_y', 'filt_z', 'magnitude']:
@@ -153,7 +171,7 @@ def generate_features(window_data, sampling_rate, d_type):
 
 def generate_samples(data, d_type):
     sampling_rate = 20 # Hz
-    window_length = 2  # seconds
+    window_length = 5  # seconds
     window_size = int(sampling_rate * window_length)
     
     features = []
@@ -185,13 +203,14 @@ root_dir = "C:/Users/rarez/Documents/Data Science/human_activity/data/"
 train_raw = pd.read_csv(root_dir + "train_raw.csv")   
 train_data = preprocess_data(train_raw) 
 train = generate_samples(train_data, 'Train')
+train = postprocess_train_data(train)
 train.to_csv(root_dir + 'train.csv', index = False)
-'''
+
 test_raw = pd.read_csv(root_dir + "test_raw.csv")
 test_data = preprocess_data(test_raw) 
 test = generate_samples(test_data, 'Test')
 test.to_csv(root_dir + 'test.csv', index = False)
-'''
+
 print("Total processing time: {:.2f} minutes".format((time.time()-start_time)/60))
 
                 
