@@ -29,8 +29,8 @@ def butter_bandpass_filter(signal_data, lowcut, highcut, fs, order=5):
     filtered_signal = signal.filtfilt(b, a, signal_data)
     return filtered_signal
 
-def preprocess_data(data_raw):
-    sampling_rate = 20 # Hz
+def preprocess_data(data_raw, transform = None):
+    #sampling_rate = 20 # Hz
 
     data = data_raw.copy()                     
     data = data.drop_duplicates()
@@ -46,50 +46,64 @@ def preprocess_data(data_raw):
         outliers = data[axis] < data[axis].quantile(0.001)
         data.loc[outliers, axis] = data[axis].quantile(0.001)   
     
-    data['magnitude'] = (data['x']**2 + data['y']**2 + data['z']**2)**0.5
+    if transform == 'flip_x':
+        data.y = -data.y
+        data.z = -data.z
+    elif transform == 'flip_y':
+        data.x = -data.x
+        data.z = -data.z
+    elif transform == 'flip_z':
+        data.x = -data.x
+        data.y = -data.y
     
+    data['magnitude'] = (data['x']**2 + data['y']**2 + data['z']**2)**0.5
+        
+    for axis in ['x', 'y', 'z', 'magnitude']:
+        col_name = 'deriv_' + axis
+        data[col_name] = data[axis].diff() 
+        
+    '''
     data['filt_x'] = butter_lowpass_filter(data['x'], 0.50, sampling_rate)
     data['filt_y'] = butter_lowpass_filter(data['y'], 0.50, sampling_rate)
     data['filt_z'] = butter_lowpass_filter(data['z'], 0.50, sampling_rate)
-
+    '''
     return data
 
 
 def postprocess_train_data(train_data):
+    '''
+    user_filter = (train_data.user_id == 358) & (train_data.activity_id.isin((1,3)))
+    down_sample = train_data[user_filter].copy()
     train_data = train_data[train_data.user_id != 358]
-    '''
-    user_filter = (train_data.user_id == 358) & (train_data.activity_id.isin((1,2)))
-    down_sample = train_data[user_filter]
-    train_data = train_data[~user_filter]
-    
+
     down_sample_1 = down_sample[down_sample.activity_id == 1]
-    down_sample_1 = down_sample_1[:100]
-    down_sample_2 = down_sample[down_sample.activity_id == 2]
-    down_sample_2 = down_sample_2[:100]
+    down_sample_1 = down_sample_1[:50]
+    down_sample_3 = down_sample[down_sample.activity_id == 3]
     
-    train_data = pd.concat([train_data, down_sample_1, down_sample_2])
+    train_data = pd.concat([train_data, down_sample_1, down_sample_3])
     '''
+    train_data = train_data[train_data.user_id != 358]
     return train_data
     
 
 def generate_moments(window_data, features, feat_list):
     
-    for axis in ['x', 'y', 'z', 'filt_x', 'filt_y', 'filt_z', 'magnitude']:
+    for axis in ['x', 'y', 'z', 'magnitude', 'deriv_x', 'deriv_y', 'deriv_z', 'deriv_magnitude']:
         feat_name = 'mean_' + axis
         features[feat_name] = window_data[axis].mean() 
         feat_list.append(feat_name)
 
-    for axis in ['x', 'y', 'z', 'filt_x', 'filt_y', 'filt_z', 'magnitude']:
+    for axis in ['x', 'y', 'z', 'magnitude', 'deriv_x', 'deriv_y', 'deriv_z', 'deriv_magnitude']:
         feat_name = 'std_' + axis
         features[feat_name] = window_data[axis].std()
         feat_list.append(feat_name)
         
-    for axis in ['x', 'y', 'z', 'filt_x', 'filt_y', 'filt_z', 'magnitude']:
+    for axis in ['x', 'y', 'z', 'magnitude', 'deriv_x', 'deriv_y', 'deriv_z', 'deriv_magnitude']:
         feat_name = 'skew_' + axis
         features[feat_name] = window_data[axis].skew()
         feat_list.append(feat_name)
         
-    for axis in ['x', 'y', 'z', 'filt_x', 'filt_y', 'filt_z', 'magnitude']:
+    for axis in ['x', 'y', 'z', 'magnitude', 'deriv_x', 'deriv_y', 'deriv_z', 'deriv_magnitude']:
         feat_name = 'kurt_' + axis
         features[feat_name] = window_data[axis].kurtosis()
         feat_list.append(feat_name)
@@ -97,22 +111,39 @@ def generate_moments(window_data, features, feat_list):
     return features, feat_list
 
 
+def generate_correlations(window_data, features, feat_list):
+    import numpy as np
+
+    corr_matrix = window_data.loc[:,'x':'z'].corr()
+    
+    features['corr_xy'] = corr_matrix.loc['x', 'y']
+    feat_list.append('corr_xy')
+    features['corr_xz'] = corr_matrix.loc['x', 'z']
+    feat_list.append('corr_xz')
+    features['corr_yz'] = corr_matrix.loc['y', 'z']
+    feat_list.append('corr_yz')
+    
+    # Real part of the sorted eigenvalues of correlation matrix are included
+    w,v = np.linalg.eig(corr_matrix)
+    w = np.sort(np.real(w))
+    
+    features['corr_eig0'] = w[0]
+    feat_list.append('corr_eig0')
+    features['corr_eig1'] = w[1]
+    feat_list.append('corr_eig1')
+    features['corr_eig2'] = w[2]
+    feat_list.append('corr_eig2')
+    
+    return features, feat_list
+
+
 def generate_quantiles(window_data, features, feat_list):
 
-    for axis in ['x', 'y', 'z', 'filt_x', 'filt_y', 'filt_z', 'magnitude']:
-        feat_name = 'q25_' + axis
-        features[feat_name] = window_data[axis].quantile(0.25)
-        feat_list.append(feat_name)
-        
-    for axis in ['x', 'y', 'z', 'filt_x', 'filt_y', 'filt_z', 'magnitude']:
-        feat_name = 'q50_' + axis
-        features[feat_name] = window_data[axis].quantile(0.50)
-        feat_list.append(feat_name)
-
-    for axis in ['x', 'y', 'z', 'filt_x', 'filt_y', 'filt_z', 'magnitude']:
-        feat_name = 'q75_' + axis
-        features[feat_name] = window_data[axis].quantile(0.75)
-        feat_list.append(feat_name)
+    for axis in ['x', 'y', 'z', 'magnitude']:
+        for q_value in [0.10 * n for n in range(1,10)]:
+            feat_name = 'q' + str(round(100*q_value)) + '_' + axis
+            features[feat_name] = window_data[axis].quantile(q_value)
+            feat_list.append(feat_name)
 
     return features, feat_list
 
@@ -123,7 +154,7 @@ def generate_psd(window_data, features, feat_list, sampling_rate):
     freq_bands = [0.01, 1.0, 2.0, 4.0, 6.0, 8.0, 10.0]
     n_freq_bands = len(freq_bands)-1
     
-    for axis in ['x', 'y', 'z', 'filt_x', 'filt_y', 'filt_z', 'magnitude']:
+    for axis in ['x', 'y', 'z', 'magnitude']:
         freq, PSD = signal.periodogram(window_data[axis], sampling_rate)
         for j in range(n_freq_bands):
             feat_name = 'psd' + str(j) + '_' + axis
@@ -163,8 +194,9 @@ def generate_features(window_data, sampling_rate, d_type):
     feat_list.extend(['win_begin_idx', 'win_end_idx'])
     
     features, feat_list = generate_moments(window_data, features, feat_list)
-    features, feat_list = generate_quantiles(window_data, features, feat_list)
-    features, feat_list = generate_psd(window_data, features, feat_list, sampling_rate)
+    features, feat_list = generate_correlations(window_data, features, feat_list)
+    #features, feat_list = generate_quantiles(window_data, features, feat_list)
+    #features, feat_list = generate_psd(window_data, features, feat_list, sampling_rate)
     
     return features, feat_list
 
@@ -201,16 +233,33 @@ start_time = time.time()
 root_dir = "C:/Users/rarez/Documents/Data Science/human_activity/data/"
 
 train_raw = pd.read_csv(root_dir + "train_raw.csv")   
-train_data = preprocess_data(train_raw) 
+
+train_data = preprocess_data(train_raw, transform = None) 
 train = generate_samples(train_data, 'Train')
 train = postprocess_train_data(train)
 train.to_csv(root_dir + 'train.csv', index = False)
 
+train_data = preprocess_data(train_raw, transform = 'flip_x') 
+train = generate_samples(train_data, 'Train')
+train = postprocess_train_data(train)
+train.to_csv(root_dir + 'train_flip_x.csv', index = False)
+
+train_data = preprocess_data(train_raw, transform = 'flip_y') 
+train = generate_samples(train_data, 'Train')
+train = postprocess_train_data(train)
+train.to_csv(root_dir + 'train_flip_y.csv', index = False)
+
+train_data = preprocess_data(train_raw, transform = 'flip_z') 
+train = generate_samples(train_data, 'Train')
+train = postprocess_train_data(train)
+train.to_csv(root_dir + 'train_flip_z.csv', index = False)
+
+'''
 test_raw = pd.read_csv(root_dir + "test_raw.csv")
 test_data = preprocess_data(test_raw) 
 test = generate_samples(test_data, 'Test')
 test.to_csv(root_dir + 'test.csv', index = False)
-
+'''
 print("Total processing time: {:.2f} minutes".format((time.time()-start_time)/60))
 
                 

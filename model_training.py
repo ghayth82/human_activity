@@ -11,20 +11,40 @@ import numpy as np
 import xgboost as xgb
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import GroupKFold
+from imblearn.over_sampling import RandomOverSampler
+from imblearn.under_sampling import NearMiss
+from imblearn.over_sampling import SMOTE
 
 root_dir = "C:/Users/rarez/Documents/Data Science/human_activity/data/"
 
-train_data = pd.read_csv(root_dir + "train.csv")    
-
+train_data = pd.read_csv(root_dir + "train.csv")
 X = train_data.loc[:, 'mean_x':].values
 y = train_data.loc[:, 'activity_id'].values
-groups = train_data.loc[:, 'user_id'].values        
-
+groups = train_data.loc[:, 'user_id'].values     
                        
+train_flip_x_data = pd.read_csv(root_dir + "train_flip_x.csv")    
+X_flip_x = train_flip_x_data.loc[:, 'mean_x':].values
+y_flip_x = train_flip_x_data.loc[:, 'activity_id'].values
+                       
+train_flip_y_data = pd.read_csv(root_dir + "train_flip_y.csv")    
+X_flip_y = train_flip_y_data.loc[:, 'mean_x':].values
+y_flip_y = train_flip_y_data.loc[:, 'activity_id'].values
+
+train_flip_z_data = pd.read_csv(root_dir + "train_flip_z.csv")    
+X_flip_z = train_flip_z_data.loc[:, 'mean_x':].values
+y_flip_z = train_flip_z_data.loc[:, 'activity_id'].values
+                         
+
 #%% -------------------------------------------------------------------------
 # Overfitting control
 
+start_time = time.time()
+
 gkf = GroupKFold(n_splits=4)
+
+ros = RandomOverSampler(random_state=31416)
+nm = NearMiss(random_state=31416, ratio = 0.6, n_jobs=-1)
+sm = SMOTE(random_state=31416, ratio = 0.6, k_neighbors=2, n_jobs=-1)
 
 scores_test = []
 scores_train = []
@@ -33,19 +53,55 @@ for train_index, test_index in gkf.split(X, y, groups):
     X_train, X_test = X[train_index], X[test_index]
     y_train, y_test = y[train_index], y[test_index]
     
+    X_flip_x_train = X_flip_x[train_index]
+    y_flip_x_train = y_flip_x[train_index]
+    X_flip_y_train = X_flip_y[train_index]
+    y_flip_y_train = y_flip_y[train_index]
+    X_flip_z_train = X_flip_z[train_index]
+    y_flip_z_train = y_flip_z[train_index]
+    
+    X_train_augm = np.concatenate((X_train, X_flip_x_train, X_flip_y_train, X_flip_z_train))
+    y_train_augm = np.concatenate((y_train, y_flip_x_train, y_flip_y_train, y_flip_z_train))
+    
+    '''
+    activity_filter = (y_train_augm==2) | (y_train_augm==5)
+    X_res = X_train_augm[activity_filter]
+    y_res = y_train_augm[activity_filter]
+    X_train_augm = X_train_augm[~activity_filter]
+    y_train_augm = y_train_augm[~activity_filter]
+ 
+    X_res, y_res = nm.fit_sample(X_res, y_res) 
+    X_train_augm = np.concatenate((X_train_augm, X_res))
+    y_train_augm = np.concatenate((y_train_augm, y_res))
+
+    activity_filter = (y_train_augm==1) | (y_train_augm==4)
+    X_res = X_train_augm[activity_filter]
+    y_res = y_train_augm[activity_filter]
+    X_train_augm = X_train_augm[~activity_filter]
+    y_train_augm = y_train_augm[~activity_filter]
+ 
+    X_res, y_res = sm.fit_sample(X_res, y_res) 
+    X_train_augm = np.concatenate((X_train_augm, X_res))
+    y_train_augm = np.concatenate((y_train_augm, y_res))
+    '''
+
+    #X_train_augm, y_train_augm = X_train, y_train
+    
     param = dict()
     param['objective'] = 'multi:softmax'
     param['num_class'] = 6
     param['updater'] = 'grow_gpu_hist'
-    param['max_depth'] = 3
-    param['min_child_weight'] = 10
+    param['max_depth'] = 4
+    param['min_child_weight'] = 20
     param['gamma'] = 10
+    param['reg_lambda'] = 1
+    param['reg_alpha'] = 0.0
     param['subsample'] = 0.5
     param['colsample_bytree'] = 0.5
     param['learning_rate'] = 0.1
-    num_round = 100
+    num_round = 10
 
-    dtrain = xgb.DMatrix(X_train, y_train)
+    dtrain = xgb.DMatrix(X_train_augm, y_train_augm)
     classifier = xgb.train(param, dtrain, num_round)
 
     dpred = xgb.DMatrix(X_train)
@@ -61,7 +117,82 @@ scores_test = np.array(scores_test)
 
 print("Train set accuracy: {:.3f} (+/- {:.3f})".format(scores_train.mean(), scores_train.std()))
 print("Test set accuracy:  {:.3f} (+/- {:.3f})".format(scores_test.mean(), scores_test.std()))
+print()
+print("Total processing time: {:.2f} seconds".format((time.time()-start_time)))
 
+
+#%% ------------------------------------------------------------------------
+# Fold tests
+
+gkf = list(GroupKFold(n_splits=4).split(X, y, groups))
+
+train_index, test_index = gkf[0]
+
+X_train, X_test = X[train_index], X[test_index]
+y_train, y_test = y[train_index], y[test_index]
+
+X_flip_x_train = X_flip_x[train_index]
+y_flip_x_train = y_flip_x[train_index]
+X_flip_y_train = X_flip_y[train_index]
+y_flip_y_train = y_flip_y[train_index]
+X_flip_z_train = X_flip_z[train_index]
+y_flip_z_train = y_flip_z[train_index]
+
+X_train_augm = np.concatenate((X_train, X_flip_x_train, X_flip_y_train, X_flip_z_train))
+y_train_augm = np.concatenate((y_train, y_flip_x_train, y_flip_y_train, y_flip_z_train))
+
+param = dict()
+param['objective'] = 'multi:softmax'
+param['num_class'] = 6
+param['updater'] = 'grow_gpu_hist'
+param['max_depth'] = 4
+param['min_child_weight'] = 20
+param['gamma'] = 15
+param['reg_lambda'] = 1
+param['reg_alpha'] = 0.0
+param['subsample'] = 0.5
+param['colsample_bytree'] = 0.5
+param['learning_rate'] = 0.1
+num_round = 10
+
+dtrain = xgb.DMatrix(X_train_augm, y_train_augm)
+dtest  = xgb.DMatrix(X_test, y_test)
+deval = xgb.DMatrix(X_train, y_train)
+evallist  = [(dtest,'test'), (deval,'train')]
+classifier = xgb.train(param, dtrain, num_round, evals = evallist)
+
+dpred = xgb.DMatrix(X_test)
+y_pred = classifier.predict(dpred)
+
+
+#%% ------------------------------------------------------------------------
+from sklearn.metrics import confusion_matrix
+
+# "Jogging"  : 0, 
+# "LyingDown": 1,
+# "Sitting"  : 2,
+# "Stairs"   : 3,
+# "Standing" : 4,
+# "Walking"  : 5
+
+confusion_matrix(y_test, y_pred)
+
+#Fold 0
+#[[ 638,    0,    0,    0,  117],
+# [   0,    1,  104,    4,    4],
+# [   0,   12,  772,   12,   31],
+# [   0,    0,  319,  108,    7],
+# [   1,    0,    0,   11, 1566]])
+
+#Fold 1    
+#[[ 718,    0,    0,    0,    0,   21],
+# [   0,    2,  188,    0,    0,    8],
+# [   0,    3,  281,    0,   41,   59],
+# [   0,    0,    0,    0,    0,  104],
+# [   0,    0,   98,    1,  127,   50],
+# [ 118,   11,  151,    1,   10, 1715]])    
+    
+    
 
 #%%------------------------------------------------------------------------- #
 # Parameter tuning
@@ -118,52 +249,6 @@ for mean, std, params in zip(means, stds, classifier.cv_results_['params']):
     print("{:0.3f} (+/-{:0.3f}) for {}".format(mean, std, params))
 
 
-#%% ------------------------------------------------------------------------
-# Tests
-
-gkf = GroupKFold(n_splits=5)
-i=0
-for train_index, test_index in gkf.split(X, y, groups):
-    i = i+1
-    if i == 2: break
-
-Counter(groups[test_index])
-Counter(y[test_index])
-
-{0: 170, 1: 90,  2: 911, 3: 152, 4: 439, 5: 1203}
-{0: 393, 1: 240, 2: 440, 3: 70,  4: 255, 5: 1568}
-{0: 747, 1: 120, 2: 316,         4: 216, 5: 1566}
-{0: 419, 1: 76,  2: 534, 3: 58,  4: 239, 5: 1635}
-{0: 564, 1: 159, 2: 456, 3: 48,  4: 368, 5: 1368}
-
-X_train, X_test = X[train_index], X[test_index]
-y_train, y_test = y[train_index], y[test_index]
-
-dtrain = xgb.DMatrix(X_train, y_train)
-dtest  = xgb.DMatrix(X_test, y_test)
-evallist  = [(dtest,'test'), (dtrain,'train')]
-classifier = xgb.train(param, dtrain, 10, evals = evallist)
-dpred = xgb.DMatrix(X_test)
-y_pred = classifier.predict(dpred)
-
-
-#%% ------------------------------------------------------------------------
-from sklearn.metrics import confusion_matrix
-
-# "Jogging"  : 0, 
-# "LyingDown": 1,
-# "Sitting"  : 2,
-# "Stairs"   : 3,
-# "Standing" : 4,
-# "Walking"  : 5
-
-confusion_matrix(y_test, y_pred)
-
-from xgboost import plot_importance
-from matplotlib import pyplot
-
-plot_importance(classifier)
-pyplot.show()
 
 #%% ------------------------------------------------------------------------
 # Submission generation

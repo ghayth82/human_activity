@@ -18,7 +18,7 @@ time_interval = test_raw['timestamp'].diff()
 
 period_anomaly = time_interval[time_interval>350]
 
-period_anomaly = time_interval[(time_interval>60) & (time_interval<350)]
+period_anomaly = time_interval[(time_interval>60) & (time_interval<360)]
 period_anomaly.hist()
 
 period_anomaly = time_interval[(time_interval>50) & (time_interval<=60)]
