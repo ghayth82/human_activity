@@ -42,18 +42,18 @@ period_anomaly.hist()
 
 period_anomaly[:100]
 
-train_raw.loc[2750:2780]
+train_raw.loc[1000:1200]
 
 '''
 Sampling anomalies
 
 train 1,851,580
 t > 350ms : 1,704 (1,642) 0.09%
-60ms < t < 350ms : 77,975 (70,125) 4.21%
-50ms < t < 60ms : 69,523 (69,004) 3.75%
-40ms < t < 50ms : 50,818 (50,820) 2.74%
-5ms < t < 40ms : 2,522 (2,343) 0.14%
-0ms < t < 5ms : 15,247 (~55K) 0.82%
+60ms < t < 350ms : 77,975 4.21%
+50ms < t < 60ms : 69,523 3.75%
+40ms < t < 50ms : 50,818 2.74%
+5ms < t < 40ms : 2,522 0.14%
+0ms < t < 5ms : 15,247 0.82%
 
 test 767,756
 t > 350ms : 264 (281) 0.04%
@@ -65,11 +65,61 @@ t > 350ms : 264 (281) 0.04%
 
 '''    
     
+train_interp = train_raw.loc[11430:11480].copy()
 
+train_interp = train_interp.set_index(['timestamp'], drop = False)
 
+t_stamps = train_interp['timestamp'].values
+t_stamps_new = list()                       
 
+t_previous = t_stamps[0]
 
+for j in range(len(t_stamps)):
+    if(((t_stamps[j] - t_previous)>60) & ((t_stamps[j] - t_previous)<360)):
+        t_previous = t_previous + 50
+        while (t_stamps[j] - t_previous) > 40:
+            t_stamps_new.append(t_previous)
+            t_previous = t_previous + 50
+       
+    t_stamps_new.append(t_stamps[j])
+    t_previous = t_stamps[j]
+            
+train_interp = train_interp.reindex(t_stamps_new)                       
 
+train_interp.timestamp = train_interp.index.values
+train_interp[['id', 'activity']] = train_interp[['id', 'activity']].ffill()   
+train_interp[['x', 'y', 'z']] = train_interp[['x', 'y', 'z']].interpolate()                       
+train_interp.id = train_interp.id.astype(int)
+                       
+submission = pd.read_csv(root_dir + "classy_fyers_final_submission.csv")                      
+                       
+sum(submission.ground_truth == submission.activity)/len(submission)
 
+                       
+submission['mag'] = (submission['x']**2 + submission['y']**2 + submission['z']**2)**0.5
+          
+submission = submission[submission.mag>5]          
+         
+                       
+                       
+                       
+                       
+                       
+                       
+                       
+                       
+                       
+                       
+                       
+                       
+                       
+                       
+                       
+                       
+                       
+                       
+                       
+                       
+                       
 
 
