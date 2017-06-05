@@ -31,12 +31,11 @@ gkf = GroupKFold(n_splits=4)
 
 scores_test = []
 scores_train = []
-accuracy0 = []
-accuracy1 = []
-accuracy2 = []
-accuracy3 = []
-accuracy4 = []
-accuracy5 = []
+
+accuracy = []
+for i in range(6):
+    accuracy.append(list())
+    
 for train_index, test_index in gkf.split(X, y, groups):
     
     X_train, X_test = X[train_index], X[test_index]
@@ -67,32 +66,25 @@ for train_index, test_index in gkf.split(X, y, groups):
     y_pred = classifier.predict(dpred)
     scores_test.append(accuracy_score(y_test, y_pred))
     
-    accuracy0.append(sum((y_pred == 0) & (y_pred == y_test))/sum(y_test == 0))
-    accuracy1.append(sum((y_pred == 1) & (y_pred == y_test))/sum(y_test == 1))
-    accuracy2.append(sum((y_pred == 2) & (y_pred == y_test))/sum(y_test == 2))
-    accuracy3.append(sum((y_pred == 3) & (y_pred == y_test))/sum(y_test == 3))
-    accuracy4.append(sum((y_pred == 4) & (y_pred == y_test))/sum(y_test == 4))
-    accuracy5.append(sum((y_pred == 5) & (y_pred == y_test))/sum(y_test == 5))
+    for i in range(6):
+        accuracy[i].append(sum((y_pred == i) & (y_pred == y_test))/sum(y_test == i))
     
 scores_train = np.array(scores_train)
 scores_test = np.array(scores_test)
-accuracy0 = np.array(accuracy0)
-accuracy1 = np.array(accuracy1)
-accuracy2 = np.array(accuracy2)
-accuracy3 = np.array(accuracy3)
-accuracy4 = np.array(accuracy4)
-accuracy5 = np.array(accuracy5)
+
+for i in range(6):
+    accuracy[i] = np.array(accuracy[i])
+    
 
 print("Train set accuracy: {:.3f} (+/- {:.3f})".format(scores_train.mean(), scores_train.std()))
 print("Test set accuracy:  {:.3f} (+/- {:.3f})".format(scores_test.mean(), scores_test.std()))
+print()
+print("Fold accuracy:")
 print(scores_test)
 print()
-print("Test set accuracy for {}: {:.3f}".format(0, accuracy0.mean()))
-print("Test set accuracy for {}: {:.3f}".format(1, accuracy1.mean()))
-print("Test set accuracy for {}: {:.3f}".format(2, accuracy2.mean()))
-print("Test set accuracy for {}: {:.3f}".format(3, accuracy3.mean()))
-print("Test set accuracy for {}: {:.3f}".format(4, accuracy4.mean()))
-print("Test set accuracy for {}: {:.3f}".format(5, accuracy5.mean()))
+for i in range(6):
+    print("Test set accuracy for {}: {:.3f}".format(i, accuracy[i].mean()))
+
 print()
 print("Total processing time: {:.2f} seconds".format((time.time()-start_time)))
 
